@@ -17,6 +17,8 @@ USE DATABASE GOOGLE_KEYWORDS_SEARCH_DATASET_DISCOVER_ALL_SEARCHES_ON_GOOGLE;
 --Vilka schemas finns
 SHOW SCHEMAS;
 
+SHOW VIEWS IN INFORMATION_SCHEMA;
+
 --Välj schema
 USE SCHEMA DATAFEEDS;
 
@@ -50,12 +52,57 @@ FROM
 
 -- e) Which are the 10 most popular keywords?
 SELECT
-    KEYWORD
+    KEYWORD,
+    COUNT(*) as total_count
 FROM
     google_keywords
 GROUP BY
     KEYWORD
 ORDER BY
-    COUNT(*)
+    total_count DESC
 LIMIT
     10;
+
+-- f) How many unique keywords are there?
+SELECT
+    COUNT(DISTINCT KEYWORD) as unique_keywords
+FROM
+    google_keywords;
+
+-- g) Check what type of platforms are used and how many users per platform
+SELECT
+    platform,
+    SUM(ROUND(calibrated_users, 2)) as total_users
+FROM
+    google_keywords
+GROUP BY
+    platform
+ORDER BY
+    total_users DESC;
+
+--h) Let's dive into what swedish people are searching. 
+-- Go into worldbanks country codes to find out the country code for Sweden. 
+-- Find the 20 most popular keywords and the number of searches of that keyword.
+SELECT
+    keyword,
+    COUNT(*) AS total_count
+FROM
+    google_keywords
+WHERE
+    country = '752'
+GROUP BY
+    keyword
+ORDER BY
+    total_count DESC
+LIMIT
+    20;
+
+-- i) Lets see how popular spotify is around the world. List the top 10 number countries and the number of searches for spotify.
+SELECT
+country,
+COUNT(*) AS search_count
+FROM google_keywords
+WHERE keyword = 'spotify'
+GROUP BY country
+ORDER BY search_count DESC
+LIMIT 10;
