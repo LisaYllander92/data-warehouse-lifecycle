@@ -54,3 +54,30 @@ SHOW DATABASES;
 
 -- Visa parametrar för kontot (t.ex. inställningar kring auto-suspend etc.)
 SHOW PARAMETERS IN ACCOUNT;
+
+# Snowflake – Systemroller och användningsområden
+
+| Roll | Rättigheter / ansvar | När du bör använda den |
+|---|---|---|
+| **ACCOUNTADMIN** | Toppnivårollen. Har alla rättigheter i hela kontot, inklusive fakturering, säkerhet och alla objekt. Ärver från SYSADMIN och SECURITYADMIN. | Endast för initial kontokonfiguration, fakturering/billing-inställningar, eller absoluta undantagsfall. **Bör aldrig användas för dagligt arbete** — för hög risk och bryter mot PoLP. |
+| **SECURITYADMIN** | Hanterar säkerhet: skapa/hantera roller (ärver från USERADMIN), bevilja/återkalla rättigheter globalt (`MANAGE GRANTS`), hantera nätverkspolicyer. | När du ska koppla roller till användare (`GRANT ROLE ... TO USER ...`), eller hantera säkerhetsrelaterade inställningar som inte rör ägande av data-/compute-objekt. |
+| **USERADMIN** | Skapar och hanterar användare och roller (men inte grants på data-objekt). Ärver till SECURITYADMIN. | När du ska skapa nya användare (`CREATE USER`) eller nya roller (`CREATE ROLE`), innan rollen kopplas till rättigheter eller användare. |
+| **SYSADMIN** | Skapar och äger databaser, scheman, tabeller och warehouses. Vanligtvis den roll som ger ut rättigheter på objekt den själv äger. | Standardrollen för att skapa och hantera warehouses, databaser, scheman och andra dataobjekt, samt bevilja rättigheter på dessa till anpassade roller. |
+| **PUBLIC** | Automatisk roll som alla användare och roller tillhör. Har normalt minimala/inga rättigheter som standard. | Använd endast om du medvetet vill ge åtkomst till *alla* i kontot — annars undvik att bevilja rättigheter hit. |
+| **Anpassade roller** (t.ex. `marketing_dlt_role`) | Skapas av USERADMIN, får specifika rättigheter tilldelade av SYSADMIN (eller ägaren av objekten), tilldelas sedan till specifika användare via SECURITYADMIN. | Skapa alltid en egen roll per funktion/team/pipeline (t.ex. en roll för dlt-laddning, en för BI-verktyg) istället för att återanvända systemrollerna direkt — detta är kärnan i PoLP. |
+
+## Typiskt rollflöde vid uppsättning (PoLP)
+
+1. **USERADMIN** → skapar rollen (`CREATE ROLE`) och/eller användaren (`CREATE USER`)
+2. **SYSADMIN** → skapar databaser/scheman/warehouses och beviljar rättigheter på dem till den nya rollen (`GRANT ... ON ... TO ROLE ...`)
+3. **SECURITYADMIN** → kopplar rollen till användaren (`GRANT ROLE ... TO USER ...`)
+
+## Minnesregel
+
+- **USERADMIN** = vem (användare och roller)
+- **SYSADMIN** = vad (databaser, scheman, warehouses, rättigheter på dem)
+- **SECURITYADMIN** = koppla ihop vem och vad (roll ↔ användare)
+- **ACCOUNTADMIN** = nödutgång, används sällan
+
+![](https://docs.snowflake.com/static/images/system-role-hierarchy.png)
+Källa: https://docs.snowflake.com/en/user-guide/security-access-control-overview#label-role-hierarchy-and-privilege-inheritance
