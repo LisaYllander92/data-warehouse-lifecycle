@@ -108,3 +108,50 @@ These study questions are good to get an overview of how snowflake works.
 | DDL               | Data Definition Language — SQL-kommandon för att definiera/ändra strukturer, t.ex. `CREATE`, `ALTER`, `DROP`. |
 | DQL               | Data Query Language — SQL-kommandon för att hämta data, i praktiken främst `SELECT`. |
 | DCL               | Data Control Language — SQL-kommandon för att styra åtkomst och rättigheter, t.ex. `GRANT`, `REVOKE`. |
+
+
+# Exercise 1
+
+## Theory questions
+
+&nbsp; a) Why is the principal of least privilege important in a company?
+- Principen (PoLP) innebär att en användare, ett program eller en enhet endast ska ha tillgång till de specifika data och resurser som krävs för att utföra sin uppgift, och inget mer. Detta för att minimera skadan vid dataintrång, stoppa spridning av skadlig kod, skydda mot insiderhot och mänskliga misstag, underlätta efterlevnad av lagar och regler samt få bättre överblick och enklare felsökning. 
+
+&nbsp; b) Explain the role of dlt in managing data pipelines.
+- dlt automatiserar vissa delar i byggandet av pipelines, såsom att hantera schema-inferens (läser av datans struktur automatiskt), schema-evolution (anpassar tabeller när källdatan ändras), typkonvertering, normalisering av nästlad data till relationella tabeller, samt inkrementill laddning så att man inte behöver ladda om all data varje gång. 
+
+&nbsp; c) What is a data connector and why is it important in data integration?
+- En data connector är en komponent som kopplar samman en datakälla (API, databas, filsystem etc.) med en pipeline, och sköter autentisering, paginering och extraktion av data i ett format som kan bearbetas vidare. Det är viktigt eftersom olika källor har helt olika gränssnitt och format — connectors abstraherar bort den komplexiteten så att man kan integrera nya källor snabbt och konsekvent, utan att skriva anpassad extraktionslogik för varje system.
+
+&nbsp; d) What are the three different *write dispositions* in dlt?
+- Append – ny data läggs till i slutet av tabellen, ingen befintlig data ändras.
+- Replace – hela tabellen skrivs över med den nya datan vid varje körning.
+- Merge – ny data matchas mot befintlig data via en nyckel (t.ex. primary/merge key) och uppdaterar eller lägger till rader (upsert), ofta med stöd för deduplicering.
+
+&nbsp; e) What is ELT and how does it differ from ETL?
+- ETL (Extract, Transform, Load): data transformeras innan den laddas in i målsystemet. Transformationen sker i ett separat verktyg/steg utanför warehouset.
+- ELT (Extract, Load, Transform): rådata laddas in i målsystemet först, och transformationen sker efteråt, inne i warehouset (t.ex. med SQL/dbt i Snowflake).
+
+&nbsp; f) Discuss the advantages of performing data transformations after loading the data.
+- Fördelar med att transformera data efter laddning
+    - Man utnyttjar warehousets skalbara beräkningskraft (t.ex. Snowflakes elastiska compute) istället för en separat transformationsmotor.
+    - Rådata bevaras orört i warehouset, vilket ger flexibilitet att göra om transformationer utan att behöva extrahera på nytt.
+    - Snabbare "time to load" — data blir tillgänglig tidigare, och transformationslogik kan itereras och versionshanteras (t.ex. med dbt) separat från laddningsprocessen.
+    - Enklare felsökning eftersom man kan spåra data tillbaka till råformatet.
+
+&nbsp; g) What is the purpose of roles in Snowflake?
+- Roller används för åtkomstkontroll (RBAC – role-based access control). De grupperar privilegier (rättigheter att t.ex. läsa, skriva, skapa objekt) och tilldelas sedan till användare. Detta gör behörighetshantering skalbar och överskådlig — man hanterar rättigheter på rollnivå istället för per användare, och roller kan även ärva privilegier från varandra i en hierarki.
+
+&nbsp; h) Explain the difference between USAGE and OWNERSHIP privileges.
+- USAGE: ger rätt att använda ett objekt (t.ex. en databas, ett schema eller ett warehouse) — man kan se och referera till det, men inte nödvändigtvis ändra dess struktur eller innehåll.
+- OWNERSHIP: ger fullständig kontroll över objektet — man kan ändra, ta bort, ge bort ägarskap och hantera alla privilegier på objektet. Endast en roll kan äga ett objekt åt gången.
+
+&nbsp; i) What information is required to create a user in Snowflake?
+- Vid CREATE USER behövs minst:
+    - Ett unikt användarnamn (login_name)
+    - Lösenord (eller annan autentiseringsmetod, t.ex. nyckelpar eller SSO)
+
+- Valfritt men vanligt att ange:
+    - Default role, default warehouse, default namespace (databas/schema)
+    - Förnamn/efternamn, e-postadress
+    - Om användaren måste byta lösenord vid första inloggning (MUST_CHANGE_PASSWORD)
