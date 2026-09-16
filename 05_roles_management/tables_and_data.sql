@@ -71,3 +71,4 @@ INSERT INTO customers (customer_name, email) VALUES
 SELECT CURRENT_SECONDARY_ROLES();
 
 SELECT * FROM transactions;
+
