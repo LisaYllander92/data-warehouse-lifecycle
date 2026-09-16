@@ -1,6 +1,12 @@
-SELECT current_role();
+-- SYSADMIN is responsible for creating warehouses and databases
+USE ROLE SYSADMIN;
 
-SELECT current_user();
+-- to doublecheck which role is used
+SELECT CURRENT_ROLE();
+
+-- to check if any other roles are active (should not be)
+-- if there is secondaty roles it will be used if the current role is missing access
+SELECT CURRENT_SECONDARY_ROLES();
 
 -- Create the Ice Cream database
 CREATE DATABASE IF NOT EXISTS ice_cream_db;

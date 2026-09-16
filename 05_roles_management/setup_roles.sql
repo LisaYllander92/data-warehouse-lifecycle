@@ -3,20 +3,27 @@
 USE ROLE USERADMIN;
 
 -- demo: privileges inheritance
+
 -- 3 ROLES 
-CREATE ROLE ice_cream_reader COMMENT = "Able to read ice_cream_db";
 
-CREATE ROLE ice_cream_writer COMMENT = "Able to do CRUD operations on ice_cream_db";
+CREATE ROLE ice_cream_reader COMMENT 
+= "Able to read ice_cream_db";
 
-CREATE ROLE ice_cream_analyst COMMENT = "Able to create views on ice_cream_db";
+CREATE ROLE ice_cream_writer COMMENT 
+= "Able to do CRUD operations on ice_cream_db";
+
+CREATE ROLE ice_cream_analyst COMMENT 
+= "Able to create views on ice_cream_db";
 
 SHOW ROLES;
 
 -- priviliges to ice_cream_reader
 USE ROLE SECURITYADMIN; -- manage grants
+
+-- manage grants for the role ice_cream_reader
+-- to be able to grant useage or read privileges on tables - the role needs access to the warehouse and db first
 GRANT USAGE ON WAREHOUSE dev_wh TO ROLE ice_cream_reader;
 GRANT USAGE ON DATABASE ice_cream_db TO ROLE ice_cream_reader;
-
 -- gets ability to reference schemas within the db but not any privileges on objs
 GRANT USAGE ON ALL SCHEMAS IN DATABASE ice_cream_db TO ROLE ice_cream_reader;
 
