@@ -79,5 +79,4 @@ SHOW PARAMETERS IN ACCOUNT;
 - **SECURITYADMIN** = koppla ihop vem och vad (roll ↔ användare)
 - **ACCOUNTADMIN** = nödutgång, används sällan
 
-![](https://docs.snowflake.com/static/images/system-role-hierarchy.png)
-Källa: https://docs.snowflake.com/en/user-guide/security-access-control-overview#label-role-hierarchy-and-privilege-inheritance
+![](images/user_roles.png)
