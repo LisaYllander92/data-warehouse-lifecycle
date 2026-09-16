@@ -57,4 +57,4 @@
 
 ![](/images/hierarchy.png)
 
-
+More on roles: https://docs.snowflake.com/en/user-guide/security-access-control-considerations#example
