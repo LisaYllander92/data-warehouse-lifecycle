@@ -1,13 +1,15 @@
+-- select which role you want/need to use
 USE ROLE ice_cream_writer;
 
+-- select the warehouse and db that the user has access to 
 USE WAREHOUSE dev_wh;
-
 USE SCHEMA ice_cream_db.public;
 
 DROP TABLE flavors;
 DROP TABLE customers;
 DROP TABLE transactions;
 
+-- CREATE TABLES 
 CREATE TABLE IF NOT EXISTS flavors (
     flavor_id INT AUTOINCREMENT,
     flavor_name STRING,
