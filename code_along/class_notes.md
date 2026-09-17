@@ -66,3 +66,20 @@ More on users & roles: https://docs.snowflake.com/en/user-guide/security-access-
 ### dlthub
 - a Data Loading Tool in python
 ![](/images/dlt_dlthub.png)
+
+### setup dlthub 
+#### 1.To upgrade the uv environment
+```bash
+pip install --upgrade uv
+```
+#### 2. To create the virual environment
+bash ```
+uv init --no-package --python 3.13
+```
+#### 3. To install dependencies
+bash ```
+uv add "dlt[snowflake]" "dlt[parquet]" pandas ipykenel
+```
+
+### Why do we need secrets.toml?
+- We need the user in secrets.toml for dlt 

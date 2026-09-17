@@ -1,5 +1,9 @@
+# ignore dlt folder
+**/.dlt/
 .dlt
 
 setup_user.sql
 
 setup_user_exercise.sql
+
+class_notes.md
