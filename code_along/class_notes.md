@@ -57,4 +57,12 @@
 
 ![](/images/hierarchy.png)
 
-More on roles: https://docs.snowflake.com/en/user-guide/security-access-control-considerations#example
+More on users & roles: https://docs.snowflake.com/en/user-guide/security-access-control-considerations#example
+
+
+# DLT (Data Load Tool)
+![](/images/dlt_staging_layer.png)
+
+### dlthub
+- a Data Loading Tool in python
+![](/images/dlt_dlthub.png)

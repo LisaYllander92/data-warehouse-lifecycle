@@ -80,3 +80,18 @@ SHOW PARAMETERS IN ACCOUNT;
 - **ACCOUNTADMIN** = nödutgång, används sällan
 
 ![](images/user_roles.png)
+
+
+# To work with dlt & dlthub
+#### 1.To upgrade the uv environment
+```bash
+pip install --upgrade uv
+```
+#### 2. To create the virual environment
+bash ```
+uv init --no-package --python 3.13
+```
+#### 3. To install dependencies
+bash ```
+uv add "dlt[snowflake]" "dlt[parquet]" pandas ipykenel
+```

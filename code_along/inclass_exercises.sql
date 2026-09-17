@@ -15,6 +15,17 @@ CREATE TABLE IF NOT EXISTS suppliers (
 
 SHOW TABLES IN ice_cream_db.public;
 
+-- should fail
+USE ROLE SYSADMIN;
+
+DROP TABLE suppliers;
+
+-- to make it work
+
+USE ROLE SECURITYADMIN;
+
+GRANT ROLE ice_cream_writer TO ROLE SYSADMIN;
+
 USE ROLE SYSADMIN;
 
 DROP TABLE suppliers;
