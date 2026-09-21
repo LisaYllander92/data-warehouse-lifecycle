@@ -115,10 +115,12 @@ New-Item -ItemType Directory -Force -Path "$HOME\.dbt"
 code "$HOME\.dbt\profiles.yml"
 ```
 
-*Navigate to dbt-folder and debug:*
+*Navigate to dbt-folder and debug: -> hopefully you get 'All checks passed'*
 ```bash
 cd 09_setup_dbt/dbt_code
 dbt debug
 ```
+
+Install extension: 'dbt power user'
 
 
