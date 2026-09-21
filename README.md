@@ -123,4 +123,21 @@ dbt debug
 
 Install extension: 'dbt power user'
 
+## Overview of a dbt project
+
+| directory/file      | details                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| dbt_project.yml     | main config file for the dbt project with project specific settings                  |
+| ~/.dbt/profiles.yml | connection configs for different environments, connect dbt to data warehouse         |
+| models              | sql files that define the models for data transformations                            |
+| schema.yml          | used for defining tests, documentations, relationships for models, seeds and sources |
+| seeds               | contains csv files that can be loaded into data warehouse                            |
+| snapshots           | define snapsoht files, useful for slowly changing dimensions (SCD)                   |
+| macros              | reusable sql snippets (macros) to DRY up the sql code                                |
+| analyses            | ad-hoc analyses for EDA, these files will not materialize as models                  |
+| logs                | log files from execution of dbt commands                                             |
+| target              | compiled sql code that dbt generates combining model files, macros and configs       |
+| tests               | custom test definitions to validate data models for data quality and integrity       |
+| docs                | markdown files to document dbt project, can be rendered in dbt documentation         |
+
 
