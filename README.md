@@ -95,3 +95,30 @@ uv init --no-package --python 3.13
 bash ```
 uv add "dlt[snowflake]" "dlt[parquet]" pandas ipykenel
 ```
+
+*To setup dbt:*
+```bash
+uv add dbt-core dbt-snowflake
+```
+*cd into correct folder*
+```bash
+dbt init dbt_code
+```
+*Note: to find account:*
+USE ROLE ORGADMIN;
+SHOW ACCOUNTS;
+copy 'account_locator_url' (delete this part 'https://....snowflakecomputing.com')
+
+*To create profiles.yml on Windows*
+```bash
+New-Item -ItemType Directory -Force -Path "$HOME\.dbt"
+code "$HOME\.dbt\profiles.yml"
+```
+
+*Navigate to dbt-folder and debug:*
+```bash
+cd 09_setup_dbt/dbt_code
+dbt debug
+```
+
+
