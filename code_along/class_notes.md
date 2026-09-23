@@ -67,7 +67,7 @@ More on users & roles: https://docs.snowflake.com/en/user-guide/security-access-
 - a Data Loading Tool in python
 ![](/images/dlt_dlthub.png)
 
-### setup dlthub 
+### setup dlt (dlthub)
 #### 1.To upgrade the uv environment
 ```bash
 pip install --upgrade uv
@@ -83,3 +83,30 @@ uv add "dlt[snowflake]" "dlt[parquet]" pandas ipykenel
 
 ### Why do we need secrets.toml?
 - We need the user in secrets.toml for dlt 
+
+# 09 Setup dbt
+1. Install dependencies
+```bash
+uv add dbt-core dbt-snowflake
+```
+*dbt-core* - connection - open python library (cloud version of dbt)
+*dbt-snowflake* - destination 
+
+2. Setup folder stucture
+cd into folder and initialize dbt whit:
+*this will generate the dbt folders*
+```bash
+dbt init
+```
+*Fill in credentials (warehouse, database etc.)*
+
+3. To create and open profiles.yml on Windows
+```bash
+New-Item -ItemType Directory -Force -Path "$HOME\.dbt"
+```
+```bash
+code "$HOME\.dbt\profiles.yml"
+```
+*Alternative:*
+Ctrl p - search for "profiles"
+or find via explorer (folder .dbt)
