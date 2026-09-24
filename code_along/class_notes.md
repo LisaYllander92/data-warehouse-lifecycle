@@ -218,9 +218,13 @@ models:
 
 **Förklaring:** `models`-blocket i `dbt_project.yml` låter dig sätta standardinställningar per mapp/lager i ditt projekt – t.ex. vilket schema modellerna ska hamna i och hur de ska materialiseras (som `table`, `view`, `incremental` osv.). Här är `staging`-modeller konfigurerade att hamna i schemat `staging`, och `refined`-modeller i schemat `warehouse`, båda materialiserade som tabeller.
 
-To run:
+*To run:*
 ```bash
-cd dbt_code 
+cd /dbt_code 
 dbt run
 ```
+
+## What is dbt?
+![](images/what_is_dbt.png)
+
 
