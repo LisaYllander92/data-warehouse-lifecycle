@@ -24,11 +24,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 
 models:
   dbt_code:
-  
     staging:
-      schema: staging
-      materialized: table
-
-    refined: 
-      schema: warehouse
-      materialized: view
+      +schema: staging
+      +materialized: table
+    refined:
+      +schema: warehouse
+      +materialized: table

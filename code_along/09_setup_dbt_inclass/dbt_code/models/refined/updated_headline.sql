@@ -2,7 +2,7 @@ WITH staging_data AS (
     SELECT
         *
     FROM
-        { { ref('original_headline') } }
+        {{ ref('original_headline') }}
 )
 SELECT
     CASE
