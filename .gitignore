@@ -2,8 +2,16 @@
 **/.dlt/
 .dlt
 
+
 setup_user.sql
 
 setup_user_exercise.sql
 
 class_notes.md
+
+# dbt
+
+target/
+dbt_packages/
+logs/
+.env
