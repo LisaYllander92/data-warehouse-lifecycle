@@ -123,6 +123,11 @@ dbt debug
 
 Install extension: 'dbt power user'
 
+#### Install dependencies
+```bash
+dbt deps
+```
+
 ## Overview of a dbt project
 
 | directory/file      | details                                                                              |
@@ -140,4 +145,10 @@ Install extension: 'dbt power user'
 | tests               | custom test definitions to validate data models for data quality and integrity       |
 | docs                | markdown files to document dbt project, can be rendered in dbt documentation         |
 
+## Testing with schema.yml
+```bash
+cd dbt_code
+dbt test
+```
 
+*Bra källa för fler tester: https://github.com/calogica/dbt-expectations/tree/0.10.3/?tab=readme-ov-file*
