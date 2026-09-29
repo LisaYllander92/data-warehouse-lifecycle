@@ -33,28 +33,44 @@ def layout():
             query_job_listnings("""
             SELECT 
             SUM(vacancies) as vacancies,
-            occupation
+            workplace_city
             FROM mart_technical_jobs
-            GROUP BY occupation
+            GROUP BY workplace_city
             ORDER BY vacancies DESC;
             """)
         )
 
     with cols[1]:
-        st.markdown("### Per occupation (top 5)")
+        st.markdown("### Per company (top 5)")
         st.bar_chart(
             query_job_listnings("""
             SELECT 
             SUM(vacancies) as vacancies,
-            occupation
+            employer_name
             FROM mart_technical_jobs
-            GROUP BY occupation
+            GROUP BY employer_name
             ORDER BY vacancies DESC
             LIMIT 5;
             """),
-            x = "OCCUPATION",
+            x = "EMPLOYER_NAME",
             y = "VACANCIES",
         )
+
+    st.markdown("## Find advertisement")
+
+    cols = st.columns(2)
+
+    with cols[0]:
+        selected_company = st.selectbox("Select a company:", df["EMPLOYER_NAME"].unique())
+
+    with cols[1]:
+        selected_headline = st.selectbox(
+            "Select an advertisement:",
+            df.query("EMPLOYER_NAME == @selected_company")["HEADLINE"],)
+
+    st.markdown("### Job ad")
+    st.markdown(df.query("HEADLINE == @selected_headline and EMPLOYER_NAME == @selected_company"
+                )["DESCRIPTION_HTML_FORMATTED"].values[0], unsafe_allow_html=True)
 
     st.markdown("## Job listnings data")
     st.dataframe(df)

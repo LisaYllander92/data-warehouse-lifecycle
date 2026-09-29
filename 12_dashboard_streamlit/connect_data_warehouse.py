@@ -19,4 +19,4 @@ def query_job_listnings (query = 'SELECT * FROM mart_technical_jobs'):
         df = pd.read_sql(query, conn)
         return df
 
-# print(query_job_listnings())
+print(query_job_listnings())
