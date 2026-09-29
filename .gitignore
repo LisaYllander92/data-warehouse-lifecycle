@@ -4,7 +4,7 @@
 
 
 setup_user.sql
-
+setup_user_reporter.sql
 setup_user_exercise.sql
 
 class_notes.md
