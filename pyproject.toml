@@ -10,4 +10,6 @@ dependencies = [
     "dlt[parquet,snowflake]>=1.30.0",
     "ipykernel>=7.3.0",
     "pandas>=3.0.5",
+    "snowflake-connector-python>=4.7.4",
+    "streamlit>=1.64.0",
 ]
