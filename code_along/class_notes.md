@@ -223,8 +223,147 @@ models:
 cd /dbt_code 
 dbt run
 ```
+Gå till Snowflake katalog och kolla att rätt schema och tabeller ligger där. 
 
-## What is dbt?
+## Vad är dbt?
 ![](images/what_is_dbt.png)
 
 
+# 10 dbt modeling - klassanteckningar
+
+1. Skapa nytt dbt mappstruktur:
+```bash
+cd <10_dbt_modeling>
+dbt init dbt_code 
+```
+Överskriv ej användare (user) i detta fall 
+Använd samma profil i profiles.yml
+
+2. Ta bort mappar som vi ej kommer använda (README, .gitignore, snapshot mm)
+*kom ihåg att kopiera från dbt .gitignore till rotmappens*
+- i macros - ta bort .gitkeep (behövs inte om mappen ej är tom) 
+
+3. I marcos - generate_schema_name.sql:
+- skriver över dbt:s standardbeteende, som annars slår ihop profilens schema med modellens +schema (t.ex. staging_warehouse). Med denna macro används istället bara modellens eget +schema-namn rakt av (t.ex. bara warehouse), vilket ger renare och mer förutsägbara schemanamn i Snowflake.
+```
+{% macro generate_schema_name(custom_schema_name, node) -%}
+    {%- set default_schema = target.schema -%}
+    {%- if custom_schema_name is none -%}
+        {{ default_schema }}
+    {%- else -%}
+        {{ custom_schema_name | trim }}
+    {%- endif -%}
+{%- endmacro %}
+```
+
+Och string_utils:
+```
+{% macro capitalize_first_letter(column) %}
+    case
+        when {{ column }} is null
+        then null
+        else upper(substr({{ column }}, 1, 1)) || lower(substr({{ column }}, 2))
+    end
+{% endmacro %}
+```
+En egen macro som formaterar text till "Stor bokstav först, resten litet" (t.ex. "MALMÖ" → "Malmö"), återanvändbar i valfri modell istället för att skriva samma case when-logik flera gånger.
+
+4. I dbt_project.yml:
+- Lägg till mappar (dim, src, fct och mart) i dbt_project.yml under models och välj schema och materialize *(tex. view eller table)*
+
+
+#### Förklaring
+
+Tänk dig att dbt_project.yml är en regellista för mapparna i din models/-katalog. Istället för att bestämma i varje SQL-fil hur den ska byggas, säger du det en gång per mapp.
+
+## Vad raderna betyder
+
+| Rad                    | Betydelse                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `+materialized: table` | "Bygg allt som en riktig tabell i databasen." Standardregeln för alla.                  |
+| `+schema: ...`         | "Lägg tabellen i det här schemat i databasen." (Ett schema är som en mapp i databasen.) |
+| `ephemeral`            | "Bygg ingen tabell alls, använd bara koden som en tillfällig mellanrutin."              |
+
+## Din config i vanlig text
+
+| Mapp i `models/` | Materialisering | Schema      | Vad händer med SQL-filerna där               |
+| ---------------- | --------------- | ----------- | -------------------------------------------- |
+| `src/`           | `ephemeral`     | `staging`   | Blir ingen tabell. Planerad plats: `staging` |
+| `dim/`           | `table`         | `warehouse` | Blir tabeller i `warehouse`                  |
+| `fct/`           | `table`         | `warehouse` | Blir tabeller i `warehouse`                  |
+| `mart/`          | `table`         | `marts`     | Blir tabeller i `marts`                      |
+
+#### Kopplingen till models
+
+- Mappnamnen i YAML-filen (src, dim, fct, mart) är samma namn som mapparna i din models/-katalog. En SQL-fil som ligger i models/dim/ får automatiskt reglerna under dim:.
+
+- Ligger en fil i models/dim/kunder.sql så blir den alltså en tabell i schemat warehouse, utan att du skrivit något om det i själva filen.
+
+#### Plustecknet
+
+- betyder "det här är en inställning". Utan + är det ett mappnamn. Därför är src en mapp, men +schema en inställning.
+
+
+
+- skapa/lägg til i package.yml och lägg till:
+```bash
+packages:
+  - package: dbt-labs/dbt_utils
+    version: 1.4.1
+``` 
+dbt_utils är ett tillägg med färdiga, testade SQL-hjälpfunktioner (macros) för vanliga behov i dbt-projekt, så man slipper återuppfinna hjulet. Vi använder den framför allt för generate_surrogate_key(), som skapar de unika ID:na (t.ex. occupation_id, employer_id) i våra dimensionstabeller.
+
+- Installera dependencies (i dbt-mappen för projektet)
+```bash
+cd <10_dbt_modeling/dbt_code>
+dbt deps
+```
+Kom ihåg att köra 
+```bash
+dbt debug
+```
+för att se att allt fungerar såhär långt (projektet är setup korrekt)
+
+### Varför använda src?
+sources.yml:
+```
+# Rådata tabellen
+# Berättar för dbt att det finns en tabell som skapats av dlt (rådatan)
+sources:
+  - name: job_ads # alias att använda i koden
+    schema: staging
+    tables:
+      - name: stg_ads
+        identifier: technical_field_job_ads # det riktiga tabellnamnet
+```
+- tex i src_job_ads:
+```
+-- this is an extract of the model
+-- funkar för att vi använder jinja språk
+-- with <alias> som (välj allt från <source name> i <tabell_namn> från source.yml 
+with stg_job_ads as (select * from {{ source('job_ads', 'stg_ads') }})
+
+select
+    OCCUPATION__LABEL as occupation_label,
+    headline,
+    NUMBER_OF_VACANCIES as vacancies,
+    RELEVANCE,
+    APPLICATION_DEADLINE
+from stg_job_ads --aliaset du valde i with statementet
+```
+
+vad händer här? 
+- en modell som med with skapar ett alias (som man väljer) att hämta datan från (via sources.yml) och sedan plockar ut det vi vill ha i den tabellen (fct_job_ads) och kan då referera till aliaset vi valde. För att göra det enklare. 
+
+senare i models/fct/fct_job_ads:
+```
+-- with <nytt alias> select allt från referera till <src-aliaset>
+with job_ads as (select * from {{ ref('src_job_ads') }})
+
+select
+    {{ dbt_utils.generate_surrogate_key(['occupation_label']) }} as occupation_id,
+    vacancies,
+    relevance,
+    application_deadline
+from job_ads
+```

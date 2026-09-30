@@ -1,8 +1,8 @@
 # Rådata tabellen
 # Berättar för dbt att det finns en tabell som skapats av dlt (rådatan)
 sources:
-  - name: job_ads # alias att använda i koden
-    schema: staging
+  - name: job_ads # alias att använda i koden (ist för hela tabellnamnet)
+    schema: staging # från rådata-schemat
     tables:
-      - name: stg_ads
+      - name: stg_ads # ist för technical_field_job_ads
         identifier: technical_field_job_ads # det riktiga tabellnamnet
