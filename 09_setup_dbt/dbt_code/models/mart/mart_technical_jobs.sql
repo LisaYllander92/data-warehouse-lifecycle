@@ -10,7 +10,7 @@ select
     e.employer_name,
     e.workplace_city,
     jd.description,
-    jd.description_html_formatted,
+    jd.description_html,
     f.relevance,
     o.occupation_group,
     o.occupation_field,
