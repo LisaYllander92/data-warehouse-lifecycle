@@ -501,3 +501,173 @@ dbt test --select fct_job_ads
 | Var definieras de? | `schema.yml` | SQL-fil i `tests/` |
 | Återanvändbara? | Ja, på flera kolumner/modeller | Nej, specifika för ett fall |
 | Bra för | Vanliga kontroller (unik, not null m.m.) | Egen affärslogik, t.ex. `relevance` ≤ 1 |
+
+---
+
+# 12. Dashboard i Streamlit: koppla dbt till Streamlit
+
+Efter att dbt har byggt marts i Snowflake kan man läsa dem direkt från en Streamlit-dashboard. Flödet är: **Snowflake (mart-tabeller) → Python (snowflake-connector) → pandas DataFrame → Streamlit**.
+
+## 1. Installera paket
+
+```bash
+uv add streamlit pandas python-dotenv snowflake-connector-python
+```
+
+## 2. Skapa en användare och roll för dashboarden
+
+Skapa en egen användare och roll för just det här syftet (att bygga dashboarden) med **endast läsrättigheter** (principen om minsta möjliga behörighet). Dashboarden ska aldrig kunna ändra eller radera data. Man kan även sätta upp en **service user** för ändamålet.
+
+```sql
+USE ROLE accountadmin;
+
+CREATE ROLE IF NOT EXISTS job_ads_reporter_role;
+
+GRANT USAGE ON WAREHOUSE dev_wh TO ROLE job_ads_reporter_role;
+GRANT USAGE ON DATABASE job_ads TO ROLE job_ads_reporter_role;
+GRANT USAGE ON SCHEMA job_ads.mart TO ROLE job_ads_reporter_role;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA job_ads.mart TO ROLE job_ads_reporter_role;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA job_ads.mart TO ROLE job_ads_reporter_role;
+GRANT SELECT ON ALL VIEWS IN SCHEMA job_ads.mart TO ROLE job_ads_reporter_role;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA job_ads.mart TO ROLE job_ads_reporter_role;
+
+CREATE USER IF NOT EXISTS reporter
+  PASSWORD = '<lösenord>'
+  DEFAULT_ROLE = job_ads_reporter_role
+  DEFAULT_WAREHOUSE = dev_wh;
+
+GRANT ROLE job_ads_reporter_role TO USER reporter;
+```
+
+> **Tips:** `FUTURE`-rättigheter gör att rollen automatiskt får åtkomst även när dbt skapar om tabellerna vid nästa körning.
+
+## 3. Skapa `.env`-fil
+
+Inloggningsuppgifter ska aldrig ligga i koden. Skapa en `.env` i projektets rot:
+
+```env
+SNOWFLAKE_USER=reporter
+SNOWFLAKE_PASSWORD=
+SNOWFLAKE_ACCOUNT=
+SNOWFLAKE_WAREHOUSE=dev_wh
+SNOWFLAKE_DATABASE=job_ads
+SNOWFLAKE_SCHEMA=mart
+SNOWFLAKE_ROLE=job_ads_reporter_role
+```
+
+> **Viktigt:** Lägg `.env` i `.gitignore` så att lösenordet aldrig hamnar på GitHub.
+
+## 4. Koppla till Snowflake
+
+Skapa en Python-fil, t.ex. `connect_data_warehouse.py`, som kopplar upp mot tabellen du vill använda och returnerar en DataFrame:
+
+```python
+import os
+
+import pandas as pd
+from dotenv import load_dotenv
+from snowflake.connector import connect
+
+
+def query_job_listings(query="SELECT * FROM mart_technical_jobs"):
+    load_dotenv()
+
+    with connect(
+        user=os.getenv("SNOWFLAKE_USER"),
+        password=os.getenv("SNOWFLAKE_PASSWORD"),
+        account=os.getenv("SNOWFLAKE_ACCOUNT"),
+        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+        database=os.getenv("SNOWFLAKE_DATABASE"),
+        schema=os.getenv("SNOWFLAKE_SCHEMA"),
+        role=os.getenv("SNOWFLAKE_ROLE"),
+    ) as conn:
+        df = pd.read_sql(query, conn)
+        return df
+```
+
+> **Obs:** Snowflake returnerar kolumnnamn med **versaler** (t.ex. `JOB_ID`), så använd det när du refererar till kolumner i DataFrame.
+
+## 5. Bygg dashboarden
+
+I `dashboard.py` importerar du funktionen och hämtar datan högst upp i layouten:
+
+```python
+import streamlit as st
+from connect_data_warehouse import query_job_listings
+
+
+def layout():
+    df = query_job_listings()
+
+    st.title("Job Ads Dashboard")
+    st.dataframe(df)
+
+
+if __name__ == "__main__":
+    layout()
+```
+
+## 6. Starta dashboarden
+
+```bash
+uv run streamlit run dashboard.py
+```
+
+Streamlit öppnar dashboarden i webbläsaren, vanligtvis på `http://localhost:8501`.
+
+---
+# 13. dbt documentation
+
+dbt kan automatiskt generera en dokumentationssida för hela projektet. Den bygger på dina modeller, kolumner, tester och de beskrivningar du själv skrivit i `.yml`-filerna.
+
+## Skriva dokumentation
+
+Beskrivningar läggs till med `description:` i `schema.yml`, på både modeller och kolumner:
+
+```yaml
+version: 2
+
+models:
+  - name: fct_job_ads
+    description: "Faktatabell med ett annonsrad per jobbannons."
+    columns:
+      - name: job_id
+        description: "Unik identifierare för annonsen."
+      - name: relevance
+        description: "Relevanspoäng mellan 0 och 1."
+```
+
+## Generera dokumentationen
+
+```bash
+dbt docs generate
+```
+
+Kommandot skapar bland annat `catalog.json` och `manifest.json` i mappen `target/`. Filerna innehåller metadata om projektet och om tabellerna i databasen (kolumner, datatyper m.m.).
+
+> **Obs:** Varje gång du lägger till eller ändrar beskrivningar (eller modeller) behöver du köra `dbt docs generate` igen för att dokumentationen ska uppdateras.
+
+## Visa dokumentationen
+
+När filerna är genererade, kör:
+
+```bash
+dbt docs serve
+```
+
+Det startar en lokal webbserver och öppnar dokumentationen i webbläsaren, vanligtvis på `http://localhost:8080`. Avsluta servern med `Ctrl + C`.
+
+Om porten redan används kan du välja en annan:
+
+```bash
+dbt docs serve --port 8081
+```
+
+## Vad finns i dokumentationen?
+
+- **Beskrivningar** av modeller och kolumner
+- **Kolumner och datatyper** för varje modell
+- **Tester** som är kopplade till varje kolumn
+- **SQL-koden** (både med Jinja och kompilerad)
+- **Lineage graph (DAG)**: en visuell graf över hur sources och modeller hänger ihop och beror på varandra

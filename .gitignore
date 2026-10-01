@@ -2,7 +2,7 @@
 **/.dlt/
 .dlt
 
-
+setup_service_acc.sql
 setup_user.sql
 setup_user_reporter.sql
 setup_user_exercise.sql
