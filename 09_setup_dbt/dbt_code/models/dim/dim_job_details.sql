@@ -1,14 +1,14 @@
 with src_job_details as (select * from {{ ref('src_job_details') }})
 
 select
-    {{ dbt_utils.generate_surrogate_key(['headline', 'description']) }} as job_details_id,
+    {{ dbt_utils.generate_surrogate_key(['id']) }} as job_details_id,
     headline,
     description,
-    max(description_html_formatted) as description_html_formatted,
-    max(employment_type) as employment_type,
-    max(duration) as duration,
-    max(salary_type) as salary_type,
-    max(scope_of_work_min) as scope_of_work_min,
-    max(scope_of_work_max) as scope_of_work_max
+    description_html,
+    coalesce(duration, 'ej angiven') as duration,
+    salary_type,
+    coalesce(salary_description, 'ej specificerad') as salary_description,
+    coalesce(working_hours_type, 'ej specificerad') as working_hours_type, 
+    scope_of_work_min,
+    scope_of_work_max
 from src_job_details
-group by headline, description
