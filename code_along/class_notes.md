@@ -380,3 +380,124 @@ from job_ads
  
 Här skapas surrogatnyckeln `occupation_id` genom att hasha `occupation_label`. Det är **inte** nyckeln i sig som kopplar ihop tabellerna, utan det faktum att `dim_occupation` räknar fram exakt samma hash (samma kolumn, samma värde) för samma yrke. Eftersom båda sidor gör identisk hashning kan de sedan joinas ihop på `occupation_id`. I den här modellen görs ingen aggregering (`max`/`min`), eftersom `fct_job_ads` ska ha en rad per annons – aggregering med `max()`/`min()` används istället i dim-modellerna, där flera rader (annonser) ska slås ihop till en rad per unikt värde (t.ex. per yrke eller arbetsgivare).
 
+# 11. Testing i dbt
+
+Tester i dbt används för att kontrollera att datan och transformationerna håller rätt kvalitet. Ett test är en SQL-fråga som letar efter rader som **bryter mot** ett antagande. Om frågan returnerar 0 rader går testet igenom, annars misslyckas det.
+
+## Generiska tester (generic data tests)
+
+Generiska tester definieras i `schema.yml` (eller valfri `.yml`-fil) under respektive modell och kolumn. Se filen för exempel på hur det kan se ut.
+
+![Exempel på generiska tester](images/generic_data_test.png)
+
+dbt har **4 inbyggda generiska tester**:
+
+| Test              | Vad det kontrollerar                                                  |
+|-------------------|-----------------------------------------------------------------------|
+| `unique`          | Alla värden i kolumnen är unika                                       |
+| `not_null`        | Kolumnen innehåller inga NULL-värden                                  |
+| `accepted_values` | Kolumnen innehåller bara värden från en definierad lista              |
+| `relationships`   | Varje värde finns även i en kolumn i en annan modell (främmande nyckel) |
+
+### Exempel
+
+```yaml
+version: 2
+
+models:
+  - name: customers
+    columns:
+      - name: customer_id
+        data_tests:
+          - unique
+          - not_null
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: ['active', 'inactive', 'pending']
+      - name: country_id
+        data_tests:
+          - relationships:
+              to: ref('countries')
+              field: country_id
+```
+
+> **Obs:** I nyare dbt-versioner (1.8+) heter nyckeln `data_tests`. Äldre versioner använder `tests`. Båda fungerar, men `data_tests` är det rekommenderade.
+
+## Fler tester med dbt_expectations
+
+Vill man ha fler typer av tester finns paketet **dbt_expectations**, som är inspirerat av Great Expectations i Python:
+[dbt-expectations på GitHub](https://github.com/calogica/dbt-expectations/tree/0.10.3/?tab=readme-ov-file)
+
+### Installation
+
+1. Lägg till paketet i `packages.yml`:
+
+```yaml
+packages:
+  - package: calogica/dbt_expectations
+    version: 0.10.3
+```
+
+2. Installera paketet lokalt:
+
+```bash
+dbt deps
+```
+
+## Köra tester
+
+Kör alla tester i terminalen:
+
+```bash
+dbt test
+```
+
+Några användbara varianter:
+
+```bash
+dbt test --select customers          # tester för en specifik modell
+dbt build                            # kör modeller och tester tillsammans
+```
+
+## Singular tests (egna SQL-tester)
+
+När de inbyggda generiska testerna inte räcker kan man skriva sina egna tester som vanliga SQL-filer i mappen `tests/`. Dessa kallas **singular tests** (enskilda data tests) och är specifika för ett enskilt fall.
+
+Principen är densamma som för generiska tester: frågan ska returnera de rader som **bryter mot** regeln. Returnerar den **0 rader** går testet igenom, annars misslyckas det.
+
+### Exempel
+
+Fil: `tests/relevance_not_above_1.sql`
+
+```sql
+SELECT *
+FROM {{ ref('fct_job_ads') }}
+WHERE relevance > 1
+```
+
+Testet kontrollerar att kolumnen `relevance` aldrig har ett värde över 1. Om det finns rader med `relevance > 1` returneras de och testet misslyckas.
+
+### Tips
+
+- Filnamnet blir testets namn, så välj ett beskrivande namn (t.ex. `relevance_not_above_1.sql`).
+- Använd `{{ ref() }}` precis som i vanliga modeller, så att dbt förstår beroendena.
+- Kör bara singular tests:
+
+```bash
+dbt test --select test_type:singular
+```
+
+- Kör alla tester för en viss modell (både generiska och singular):
+
+```bash
+dbt test --select fct_job_ads
+```
+
+### Generic vs. singular
+
+| | Generiska tester | Singular tests |
+|---|---|---|
+| Var definieras de? | `schema.yml` | SQL-fil i `tests/` |
+| Återanvändbara? | Ja, på flera kolumner/modeller | Nej, specifika för ett fall |
+| Bra för | Vanliga kontroller (unik, not null m.m.) | Egen affärslogik, t.ex. `relevance` ≤ 1 |
