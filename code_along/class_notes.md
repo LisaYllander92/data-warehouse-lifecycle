@@ -671,3 +671,62 @@ dbt docs serve --port 8081
 - **Tester** som är kopplade till varje kolumn
 - **SQL-koden** (både med Jinja och kompilerad)
 - **Lineage graph (DAG)**: en visuell graf över hur sources och modeller hänger ihop och beror på varandra
+
+
+# 14. Orchestration Dagster
+
+### Vad är Dagster?
+- data orchestrator
+- automate data pipeline
+- produce data assets
+- Software Defined Assets(SDA) [Read More](https://dagster.io/glossary/software-defined-assets)
+    - define assets and their relationships
+    - execution plan inferred from these definitions
+    - declarative programming (ex.sql) (vs imperative programming (ex.pandas))
+- benefits for asset-centric approach
+    - manage dependencies
+    - monitor execution
+
+  ## Core concepts
+With dagster, a data pipeline orchestration is built by components of asset, job, schedule and sensor etc. In a python script, definitions is used to collect these components to build a workflow. The definitions will be then deployed for materializeion.
+
+dagster components:
+
+![Dagster core components](images/dagster_components.png)
+
+### Asset
+- a logical unit of data like a database table, a csv file, a png file etc...
+- an ```asset``` can has dependencies on other ```asset```
+- an ```asset``` can be used in a ```job```, ```schedule``` or ```sensor```
+
+### Job
+- the main form of execution
+- contain a selection of ```asset```
+- can be scheuled by ```schedule``` or triggered by ```sensor```
+
+### Scheule
+- a way to automate ```job``` or materialization of ```asset``` at a specific interval
+- after deployment, the automation needs to be started in dagster UI
+
+### Sensor
+- a way to trigger ```job``` or materialization of ```asset``` when an certain event occur
+- after deployment, the automation needs to be started in dagster UI
+
+### Definitions
+- ```Definitions``` is a top-level construct in a workflow
+- only objects included in the definitions will be deployed and visible within dagster UI
+
+## Installation 
+
+Installing the python packages below to your uv virtual environment:
+
+```bash
+uv add dagster dagster-webserver dagster-dlt dagster-dbt
+```
+
+## Command
+To start a dagster local development server and load definitions from a python file:
+
+```bash
+dagster dev -f <python file>
+```
