@@ -36,13 +36,3 @@ models:
     mart:
       +schema: mart
       +materialized: table
-
-# for 09 setup dbt
-#models:
-#  dbt_code:
-#    staging:
-#      schema: staging
-#      materialized: table
-#    refined: 
-#      schema: warehouse
-#      materialized: table

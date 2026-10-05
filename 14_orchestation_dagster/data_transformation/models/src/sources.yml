@@ -6,3 +6,6 @@ sources:
     tables:
       - name: stg_ads # ist för technical_field_job_ads
         identifier: technical_field_job_ads # det riktiga tabellnamnet
+        meta:
+          dagster:
+            asset_key: ['dlt_jobads_source_jobads_resource']

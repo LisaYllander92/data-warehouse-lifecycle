@@ -724,9 +724,40 @@ Installing the python packages below to your uv virtual environment:
 uv add dagster dagster-webserver dagster-dlt dagster-dbt
 ```
 
+## Setup folder structure
+- kopiera från tidigare projekt (macros, models, target, dbt_project.yml, packages.yml och package-lock.yml)
+
+lägg till i source.yml:         meta:
+          dagster:
+            asset_key: ['dlt_jobads_source_jobads_resource']
+
+- installera dependencis:
+```bash
+dbt deps
+```
+
+*Note: Om du får command not found, testa select python interpreter (.venv) och/eller kör från den mappen du står i:
+```bash
+source ../../.venv/Scripts/activate
+```
+
+
 ## Command
 To start a dagster local development server and load definitions from a python file:
 
 ```bash
 dagster dev -f <python file>
 ```
+
+## Create a dagster pipeline with the components below:
+- a `dlt resource` and `dlt asset` to stage Jobtech API data,
+- a job to materialize `dlt asset`,
+- a schedule to schedule to job above,
+- a `dbt resource` and `dbt asset` for data transformation,
+- a job to materialize `dbt asset`,
+- a sensor to start the job above whenever `dlt asset` is materialized
+- a `definitions` to collect all the above components for deployment
+
+After the deployment, check the dagster UI to understand different components.
+
+Then, streamlit app outside this orchestration will always fetch the latest data from data warehouse.
