@@ -725,18 +725,25 @@ uv add dagster dagster-webserver dagster-dlt dagster-dbt
 ```
 
 ## Setup folder structure
-- kopiera från tidigare projekt (macros, models, target, dbt_project.yml, packages.yml och package-lock.yml)
+- kopiera mappar från tidigare projekt 
+    - macros, models, target, dbt_project.yml, packages.yml och package-lock.yml
 
-lägg till i source.yml:         meta:
-          dagster:
-            asset_key: ['dlt_jobads_source_jobads_resource']
+- lägg till i source.yml:         
+```
+meta:
+  dagster:
+    asset_key: ['dlt_jobads_source_jobads_resource']
+```
+
 
 - installera dependencis:
 ```bash
 dbt deps
 ```
 
-*Note: Om du får command not found, testa select python interpreter (.venv) och/eller kör från den mappen du står i:
+*Note: Om du får 'command not found':* 
+1. se till att du har rätt 'select python interpreter' - .venv
+2. aktivera virtuel inviornment från den mappen du står i:
 ```bash
 source ../../.venv/Scripts/activate
 ```
