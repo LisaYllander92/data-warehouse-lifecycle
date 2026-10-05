@@ -72,7 +72,7 @@ dbt_project.prepare_if_dev()
 @dbt_assets(manifest=dbt_project.manifest_path) # path to the dbt manifest.json
 # note the dependency injection similar to that in dlt asset
 def dbt_models(context: dg.AssetExecutionContext, dbt: DbtCliResource):
-    yield from dbt.cli(["biuld"], context=context).stream()  # stream() is for showing the progress realtime in dagster UI
+    yield from dbt.cli(["build"], context=context).stream()  # stream() is for showing the progress realtime in dagster UI
 
 
 # ==================== #

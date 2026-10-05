@@ -1,9 +1,90 @@
-# 05 Users och Roles (Snowflake)
+# Kursanteckningar: Data Warehouse (Snowflake)
 
-## Varför?
+## Innehåll
+- [Snowflake: kontoinfo och credits](#snowflake-kontoinfo-och-credits)
+- [05. Users och Roles (Snowflake)](#05-users-och-roles-snowflake)
+- [06–08. dlt (Data Load Tool)](#0608-dlt-data-load-tool)
+- [09. Setup dbt](#09-setup-dbt)
+- [10. dbt modeling](#10-dbt-modeling)
+- [11. Testing i dbt](#11-testing-i-dbt)
+- [12. Dashboard i Streamlit](#12-dashboard-i-streamlit-koppla-dbt-till-streamlit)
+- [13. dbt documentation](#13-dbt-documentation)
+- [14. Orkestrering med Dagster](#14-orkestrering-med-dagster)
+
+---
+
+## Snowflake: kontoinfo och credits
+
+### Kontoinformation
+```sql
+-- Visa nuvarande region
+SELECT CURRENT_REGION();
+
+-- Visa nuvarande konto och organisation
+SELECT CURRENT_ACCOUNT(), CURRENT_ORGANIZATION_NAME();
+
+-- Visa nuvarande roll, warehouse, databas och schema
+SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA();
+
+-- Visa Snowflake-version (klient/servervarning)
+SELECT CURRENT_VERSION();
+
+-- Visa aktuell användare
+SELECT CURRENT_USER();
+```
+
+### Edition och kontoöversikt
+Kräver ACCOUNTADMIN eller motsvarande rättigheter.
+
+```sql
+-- Lista alla konton i organisationen med edition, region m.m.
+SHOW ORGANIZATION ACCOUNTS;
+
+-- Alternativ: detaljerad kontoinfo via ACCOUNT_USAGE
+SELECT ACCOUNT_NAME, EDITION, REGION, CREATED_ON
+FROM SNOWFLAKE.ORGANIZATION_USAGE.ACCOUNTS;
+```
+
+### Credit-förbrukning
+```sql
+-- Totalt antal credits förbrukade (alla tider, i ACCOUNT_USAGE-schemat)
+SELECT SUM(CREDITS_USED) AS TOTAL_CREDITS
+FROM SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY;
+
+-- Credits förbrukade per dag, senaste 30 dagarna
+SELECT TO_DATE(START_TIME) AS USAGE_DATE, SUM(CREDITS_USED) AS DAILY_CREDITS
+FROM SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY
+WHERE START_TIME >= DATEADD('day', -30, CURRENT_TIMESTAMP())
+GROUP BY USAGE_DATE
+ORDER BY USAGE_DATE;
+
+-- Credits förbrukade per warehouse
+SELECT WAREHOUSE_NAME, SUM(CREDITS_USED) AS TOTAL_CREDITS
+FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+GROUP BY WAREHOUSE_NAME
+ORDER BY TOTAL_CREDITS DESC;
+```
+
+### Övrigt användbart
+```sql
+-- Lista alla warehouses i kontot
+SHOW WAREHOUSES;
+
+-- Lista alla databaser
+SHOW DATABASES;
+
+-- Visa parametrar för kontot (t.ex. inställningar kring auto-suspend etc.)
+SHOW PARAMETERS IN ACCOUNT;
+```
+
+---
+
+## 05. Users och Roles (Snowflake)
+
+### Varför?
 - För att samarbeta och hantera säkerhet med users och roles i Snowflake.
 
-## Access control i Snowflake
+### Access control i Snowflake
 Snowflake använder två modeller för åtkomstkontroll:
 
 - **DAC (Discretionary Access Control)**
@@ -23,15 +104,15 @@ Snowflake använder två modeller för åtkomstkontroll:
 - **Vi – Student-roll**
     - Rättighet att lämna in uppgifter
 
-### Skillnad mellan Role och User
+#### Skillnad mellan Role och User
 - **Role** – själva rollen, t.ex. "Teacher".
 - **User** – en fysisk person, t.ex. "Debbie".
 
-### Privilegier ärvs
+#### Privilegier ärvs
 - Roller kan GRANTas (beviljas) till olika users.
 - Privilegier ärvs beroende på hur mycket åtkomst en roll eller user ska ha (en roll högre upp i hierarkin ärver rättigheterna från rollerna under sig).
 
-## Systemdefinierade roller (system-defined roles)
+### Systemdefinierade roller (system-defined roles)
 
 Snowflake har ett antal inbyggda roller med olika ansvarsområden:
 
@@ -65,7 +146,7 @@ Snowflake har ett antal inbyggda roller med olika ansvarsområden:
 - En roll som automatiskt tilldelas alla users.
 - Objekt som ägs av PUBLIC är tillgängliga för alla.
 
-## Hierarki av roller och ärvda privilegier
+### Hierarki av roller och ärvda privilegier
 
 Hierarkin ser ut ungefär så här (uppifrån och ned):
 
@@ -87,14 +168,40 @@ ACCOUNTADMIN
 
 Läs mer: https://docs.snowflake.com/en/user-guide/security-access-control-considerations#example
 
+![Användare och roller](images/user_roles.png)
+
+### Sammanfattning: systemroller och användningsområden
+
+| Roll | Rättigheter / ansvar | När du bör använda den |
+|---|---|---|
+| **ACCOUNTADMIN** | Toppnivårollen. Har alla rättigheter i hela kontot, inklusive fakturering, säkerhet och alla objekt. Ärver från SYSADMIN och SECURITYADMIN. | Endast för initial kontokonfiguration, fakturering/billing-inställningar, eller absoluta undantagsfall. **Bör aldrig användas för dagligt arbete**, för hög risk och bryter mot PoLP. |
+| **SECURITYADMIN** | Hanterar säkerhet: skapa/hantera roller (ärver från USERADMIN), bevilja/återkalla rättigheter globalt (`MANAGE GRANTS`), hantera nätverkspolicyer. | När du ska koppla roller till användare (`GRANT ROLE ... TO USER ...`), eller hantera säkerhetsrelaterade inställningar som inte rör ägande av data-/compute-objekt. |
+| **USERADMIN** | Skapar och hanterar användare och roller (men inte grants på data-objekt). Ärver till SECURITYADMIN. | När du ska skapa nya användare (`CREATE USER`) eller nya roller (`CREATE ROLE`), innan rollen kopplas till rättigheter eller användare. |
+| **SYSADMIN** | Skapar och äger databaser, scheman, tabeller och warehouses. Vanligtvis den roll som ger ut rättigheter på objekt den själv äger. | Standardrollen för att skapa och hantera warehouses, databaser, scheman och andra dataobjekt, samt bevilja rättigheter på dessa till anpassade roller. |
+| **PUBLIC** | Automatisk roll som alla användare och roller tillhör. Har normalt minimala/inga rättigheter som standard. | Använd endast om du medvetet vill ge åtkomst till *alla* i kontot, annars undvik att bevilja rättigheter hit. |
+| **Anpassade roller** (t.ex. `marketing_dlt_role`) | Skapas av USERADMIN, får specifika rättigheter tilldelade av SYSADMIN (eller ägaren av objekten), tilldelas sedan till specifika användare via SECURITYADMIN. | Skapa alltid en egen roll per funktion/team/pipeline (t.ex. en roll för dlt-laddning, en för BI-verktyg) istället för att återanvända systemrollerna direkt. Detta är kärnan i PoLP. |
+
+#### Typiskt rollflöde vid uppsättning (PoLP)
+
+1. **USERADMIN** → skapar rollen (`CREATE ROLE`) och/eller användaren (`CREATE USER`)
+2. **SYSADMIN** → skapar databaser/scheman/warehouses och beviljar rättigheter på dem till den nya rollen (`GRANT ... ON ... TO ROLE ...`)
+3. **SECURITYADMIN** → kopplar rollen till användaren (`GRANT ROLE ... TO USER ...`)
+
+#### Minnesregel
+
+- **USERADMIN** = vem (användare och roller)
+- **SYSADMIN** = vad (databaser, scheman, warehouses, rättigheter på dem)
+- **SECURITYADMIN** = koppla ihop vem och vad (roll ↔ användare)
+- **ACCOUNTADMIN** = nödutgång, används sällan
+
 ---
 
-# DLT (Data Load Tool)
+## 06–08. dlt (Data Load Tool)
 
-## dlthub
+### dlthub
 - **dlt** (data load tool) är ett Python-bibliotek för att ladda in data (t.ex. från API:er eller filer) till en destination, som en del av staging-lagret i en data-pipeline.
 
-## Setup av dlt (dlthub)
+### Setup av dlt (dlthub)
 
 1. Uppgradera `uv`:
 ```bash
@@ -113,28 +220,36 @@ uv add "dlt[snowflake]" "dlt[parquet]" pandas ipykernel
 
 ### Varför behöver vi secrets.toml?
 - dlt läser inloggningsuppgifter (t.ex. user, password, account) från en `.dlt/secrets.toml`-fil.
-- Detta gör att man slipper hårdkoda känsliga uppgifter i koden – de hålls separata och kan enkelt bytas ut eller hållas utanför versionshantering (t.ex. via `.gitignore`).
+- Detta gör att man slipper hårdkoda känsliga uppgifter i koden. De hålls separata och kan enkelt bytas ut eller hållas utanför versionshantering (t.ex. via `.gitignore`).
 
 ---
 
-# 09 Setup dbt
+## 09. Setup dbt
 
-1. Installera beroenden:
+### 1. Installera beroenden
 ```bash
 uv add dbt-core dbt-snowflake
 ```
 - **dbt-core** – själva open source-verktyget/kommandoradsverktyget som gör transformeringarna. (Detta är *inte* samma sak som dbt Cloud, som är ett separat betalt SaaS-verktyg med bland annat webb-UI och schemaläggning.)
 - **dbt-snowflake** – adapter/plugin som gör att dbt-core kan koppla upp sig mot och köra kod i Snowflake (destinationen).
 
-2. Sätt upp mappstrukturen:
+Installera även VS Code-tillägget **dbt Power User**.
 
-Gå in i mappen och initiera dbt med:
+### 2. Sätt upp mappstrukturen
+Gå in i rätt mapp och initiera dbt:
 ```bash
-dbt init
+dbt init dbt_code
 ```
 *(Detta genererar dbt-mapparna och du fyller i uppkopplingsuppgifter till Snowflake – warehouse, database, m.m. – i samband med detta.)*
 
-3. Skapa och öppna `profiles.yml` på Windows (om den inte redan skapades av `dbt init`, eller om du vill sätta upp den manuellt):
+**Hitta ditt account:** kör följande i Snowflake och kopiera `account_locator_url`. Ta bort delen `https://....snowflakecomputing.com`, så att bara själva account-identifieraren återstår.
+```sql
+USE ROLE ORGADMIN;
+SHOW ACCOUNTS;
+```
+
+### 3. Skapa och öppna `profiles.yml` på Windows
+Om den inte redan skapades av `dbt init`, eller om du vill sätta upp den manuellt:
 ```bash
 New-Item -ItemType Directory -Force -Path "$HOME\.dbt"
 ```
@@ -145,23 +260,38 @@ code "$HOME\.dbt\profiles.yml"
 - Ctrl+P i VS Code och sök på "profiles"
 - eller hitta filen manuellt via utforskaren (`.dbt`-mappen i din hemkatalog)
 
-### Mappar i dbt (genereras av `dbt init`)
+### 4. Kontrollera uppsättningen
+Gå till dbt-mappen och kör debug. Förhoppningsvis får du **All checks passed**:
+```bash
+cd 09_setup_dbt/dbt_code
+dbt debug
+```
 
-| Mapp | Beskrivning |
+Installera dbt-paket:
+```bash
+dbt deps
+```
+
+### Mappar och filer i dbt (genereras av `dbt init`)
+
+| Mapp / fil | Beskrivning |
 |---|---|
-| **models** | Här ligger dina SQL-filer för datatransformering – kärnan i dbt-projektet. |
+| **models** | Här ligger dina SQL-filer för datatransformering, kärnan i dbt-projektet. |
 | **seeds** | CSV-filer med statisk referensdata som dbt laddar in direkt som tabeller i databasen (t.ex. landskoder eller andra sällan-ändrade lookup-tabeller). Körs *inte* genom samma transformeringslogik som models. |
 | **snapshots** | Standardmappen där dbt sparar filer som används för att spåra historiska dataförändringar över tid, med hjälp av Type 2 Slowly Changing Dimensions (SCD). |
-| **tests** | Innehåller tester som kontrollerar att data i Snowflake ser ut som förväntat (t.ex. unika värden, inga null-värden). |
+| **tests** | Innehåller tester som kontrollerar att data i Snowflake ser ut som förväntat (t.ex. unika värden, inga null-värden). Egna tester skrivs här. |
 | **logs** | Sparar loggfiler från dbt-körningar (t.ex. `dbt run`), bra för felsökning. |
-| **analyses** | SQL-filer för analys/ad-hoc-frågor som kompileras av dbt men *inte* körs eller materialiseras som models. |
-| **macros** | "Funktioner" i dbt, skrivna med Jinja – återanvändbar SQL-logik som kan anropas från flera models. |
+| **analyses** | SQL-filer för analys/ad-hoc-frågor (EDA) som kompileras av dbt men *inte* körs eller materialiseras som models. |
+| **macros** | "Funktioner" i dbt, skrivna med Jinja. Återanvändbar SQL-logik som kan anropas från flera models (DRY). |
+| **target** | Kompilerad SQL som dbt genererar genom att kombinera model-filer, macros och konfiguration. |
+| **docs** | Markdown-filer för att dokumentera dbt-projektet, kan renderas i dbt-dokumentationen. |
+| **schema.yml** | Definierar tester, dokumentation och relationer för models, seeds och sources. |
 | **dbt_project.yml** | Huvudkonfigurationsfilen för hela dbt-projektet (namn, version, sökvägar, materialiseringsinställningar per mapp, m.m.). |
-| **profiles.yml** | Innehåller uppkopplingsuppgifter (credentials) till databasen. Man kan ha flera profiler i samma fil om man behöver flera uppsättningar (t.ex. dev/prod) – **var försiktig, om du skriver över filen förlorar du dina sparade credentials.** |
+| **profiles.yml** (`~/.dbt/`) | Innehåller uppkopplingsuppgifter (credentials) till databasen. Man kan ha flera profiler i samma fil om man behöver flera uppsättningar (t.ex. dev/prod). **Var försiktig: om du skriver över filen förlorar du dina sparade credentials.** |
 
-Bra källa: https://medium.com/@likkilaxminarayana/6-dbt-project-structure-explained-a-practical-guide-for-analytics-engineers-5894f6230756
-
-https://docs.getdbt.com/category/project-configs?version=2
+Bra källor:
+- https://medium.com/@likkilaxminarayana/6-dbt-project-structure-explained-a-practical-guide-for-analytics-engineers-5894f6230756
+- https://docs.getdbt.com/category/project-configs?version=2
 
 ### profiles.yml (exempel)
 ```yaml
@@ -216,42 +346,44 @@ models:
       materialized: table   # skapas som en fysisk tabell i warehouse-schemat
 ```
 
-**Förklaring:** `models`-blocket i `dbt_project.yml` låter dig sätta standardinställningar per mapp/lager i ditt projekt – t.ex. vilket schema modellerna ska hamna i och hur de ska materialiseras (som `table`, `view`, `incremental` osv.). Här är `staging`-modeller konfigurerade att hamna i schemat `staging`, och `refined`-modeller i schemat `warehouse`, båda materialiserade som tabeller.
+**Förklaring:** `models`-blocket i `dbt_project.yml` låter dig sätta standardinställningar per mapp/lager i ditt projekt, t.ex. vilket schema modellerna ska hamna i och hur de ska materialiseras (som `table`, `view`, `incremental` osv.). Här är `staging`-modeller konfigurerade att hamna i schemat `staging`, och `refined`-modeller i schemat `warehouse`, båda materialiserade som tabeller.
 
-*To run:*
+### Köra
 ```bash
-cd /dbt_code 
+cd /dbt_code
 dbt run
 ```
-Gå till Snowflake katalog och kolla att rätt schema och tabeller ligger där. 
+Gå till Snowflake-katalogen och kolla att rätt schema och tabeller ligger där.
 
-## Vad är dbt?
-![](images/what_is_dbt.png)
+### Vad är dbt?
+![Vad är dbt?](images/what_is_dbt.png)
 
+---
 
-# 10 dbt modeling
- 
-## 1. Skapa ny dbt-mappstruktur
+## 10. dbt modeling
+
+### 1. Skapa ny dbt-mappstruktur
 ```bash
 cd 10_dbt_modeling
 dbt init dbt_code
 ```
 `dbt init` initierar ett nytt dbt-projekt i undermappen `dbt_code` och frågar interaktivt efter uppkopplingsuppgifter till Snowflake.
- 
->  Svara att den **inte** ska skrivas över, så att du återanvänder samma uppkopplingsuppgifter som i tidigare övningar.
- 
+
+> Svara att den **inte** ska skrivas över, så att du återanvänder samma uppkopplingsuppgifter som i tidigare övningar.
+
 Återanvänd samma profil (`dbt_snowflake`) i `profiles.yml` som i tidigare lektioner, istället för att skapa en helt ny.
- 
-## 2. Städa mappstrukturen
+
+### 2. Städa mappstrukturen
 Ta bort mappar/filer som inte används i just detta projekt (t.ex. `README.md`, `.gitignore`, `snapshots` om ni inte snapshot:ar).
- 
+
 - **Kom ihåg att kopiera innehållet från dbt:s genererade `.gitignore` till rotmappens `.gitignore`**, så att t.ex. `target/`, `dbt_packages/` och `logs/` ignoreras även på projektnivå (annars riskerar du samma "allt är rött i git"-problem som tidigare).
-- I `macros/`-mappen: ta bort `.gitkeep`-filen. Den filen finns bara för att git ska spåra en annars tom mapp – behövs inte längre när mappen innehåller riktiga macro-filer.
-## 3. Macros: generate_schema_name och string_utils
- 
-### generate_schema_name.sql
+- I `macros/`-mappen: ta bort `.gitkeep`-filen. Den filen finns bara för att git ska spåra en annars tom mapp och behövs inte längre när mappen innehåller riktiga macro-filer.
+
+### 3. Macros: generate_schema_name och string_utils
+
+#### generate_schema_name.sql
 Skriver över dbt:s standardbeteende, som annars slår ihop profilens schema med modellens `+schema` (t.ex. `staging_warehouse`). Med denna macro används istället bara modellens eget `+schema`-namn rakt av (t.ex. bara `warehouse`), vilket ger renare och mer förutsägbara schemanamn i Snowflake.
- 
+
 ```sql
 {% macro generate_schema_name(custom_schema_name, node) -%}
     {%- set default_schema = target.schema -%}
@@ -262,10 +394,10 @@ Skriver över dbt:s standardbeteende, som annars slår ihop profilens schema med
     {%- endif -%}
 {%- endmacro %}
 ```
- 
-### string_utils.sql – capitalize_first_letter
+
+#### string_utils.sql – capitalize_first_letter
 En egen macro som formaterar text till "Stor bokstav först, resten litet" (t.ex. `"MALMÖ"` → `"Malmö"`), återanvändbar i valfri modell istället för att skriva samma `case when`-logik flera gånger.
- 
+
 ```sql
 {% macro capitalize_first_letter(column) %}
     case
@@ -275,63 +407,63 @@ En egen macro som formaterar text till "Stor bokstav först, resten litet" (t.ex
     end
 {% endmacro %}
 ```
- 
-## 4. dbt_project.yml – konfigurera mapparna
+
+### 4. dbt_project.yml – konfigurera mapparna
 Lägg till mapparna (`src`, `dim`, `fct`, `mart`) under `models:` och sätt `+schema` och `+materialized` (t.ex. `view` eller `table`) för var och en.
- 
-### Förklaring
+
+#### Förklaring
 Tänk dig att `dbt_project.yml` är en regellista för mapparna i din `models/`-katalog. Istället för att bestämma i varje SQL-fil hur den ska byggas, säger du det en gång per mapp.
- 
+
 **Vad raderna betyder:**
- 
+
 | Rad | Betydelse |
 |---|---|
 | `+materialized: table` | "Bygg allt som en riktig tabell i databasen." |
 | `+schema: ...` | "Lägg tabellen i det här schemat i databasen." (Ett schema är som en mapp i databasen.) |
 | `+materialized: ephemeral` | "Bygg ingen tabell alls, använd bara koden som en tillfällig mellanrutin (klistras in som en CTE i modeller som refererar till den)." |
- 
+
 **Config i klartext:**
- 
+
 | Mapp i `models/` | Materialisering | Schema | Vad händer med SQL-filerna där |
 |---|---|---|---|
 | `src/` | `ephemeral` | `staging` | Blir ingen egen tabell/view i Snowflake; koden klistras in i modeller som gör `ref()` till den. |
 | `dim/` | `table` | `warehouse` | Blir tabeller i `warehouse` |
 | `fct/` | `table` | `warehouse` | Blir tabeller i `warehouse` |
 | `mart/` | `table` | `marts` | Blir tabeller i `marts` |
- 
+
 > ⚠️ **Kom ihåg:** i en tidigare lektion användes schemat `mart` (singular) och du fick av misstag två parallella scheman (`mart` och `marts`) med samma tabell, vilket du fick städa bort manuellt. Se till att du är konsekvent med vilket namn (`mart` eller `marts`) du använder i det här projektet, så att du inte återskapar samma dubblett.
- 
+
 **Kopplingen till models:** Mappnamnen i YAML-filen (`src`, `dim`, `fct`, `mart`) är samma namn som mapparna i din `models/`-katalog. En SQL-fil som ligger i `models/dim/` får automatiskt reglerna under `dim:`. Ligger en fil i `models/dim/kunder.sql` blir den alltså en tabell i schemat `warehouse`, utan att du skrivit något om det i själva filen.
- 
+
 **Plustecknet:** `+` betyder "det här är en inställning". Utan `+` är det ett mappnamn. Därför är `src` en mapp, men `+schema` en inställning.
- 
-## 5. packages.yml – dbt_utils
- 
+
+### 5. packages.yml – dbt_utils
+
 > Filen ska heta **`packages.yml`** (plural), inte `package.yml`. Ett felstavat filnamn gör att dbt inte hittar den, och `dbt deps` har inget att installera.
- 
+
 ```yaml
 packages:
   - package: dbt-labs/dbt_utils
     version: 1.4.1
 ```
- 
+
 `dbt_utils` är ett tillägg med färdiga, testade SQL-hjälpfunktioner (macros) för vanliga behov i dbt-projekt, så man slipper återuppfinna hjulet. Vi använder den framför allt för `generate_surrogate_key()`, som skapar de unika ID:na (t.ex. `occupation_id`, `employer_id`) i våra dimensionstabeller.
- 
+
 Installera beroenden (i dbt-mappen för projektet):
 ```bash
 cd 10_dbt_modeling/dbt_code
 dbt deps
 ```
- 
+
 Kör därefter:
 ```bash
 dbt debug
 ```
 för att bekräfta att anslutningen och projektet är korrekt konfigurerat, innan du börjar bygga modeller.
- 
-## Varför använda src?
- 
-### sources.yml
+
+### Varför använda src?
+
+#### sources.yml
 ```yaml
 # Rådatatabellen.
 # Berättar för dbt att det finns en tabell skapad av dlt (rådatan),
@@ -343,14 +475,14 @@ sources:
       - name: stg_ads
         identifier: technical_field_job_ads   # det riktiga tabellnamnet i Snowflake
 ```
- 
-### t.ex. i src_job_ads
+
+#### t.ex. i src_job_ads
 ```sql
 -- this is an extract of the model
 -- funkar tack vare Jinja-templating (dubbla måsvingar {{ }})
 -- with <alias> as (select allt från <source_name>.<table_name> enligt sources.yml)
 with stg_job_ads as (select * from {{ source('job_ads', 'stg_ads') }})
- 
+
 -- gör inga större transformeringar i src-lagret – det är till för att
 -- plocka ut och döpa om relevanta kolumner, inte för affärslogik
 select
@@ -361,15 +493,15 @@ select
     APPLICATION_DEADLINE
 from stg_job_ads   -- aliaset som valdes i with-satsen
 ```
- 
+
 **Vad händer här?**
 En modell som med `with` skapar ett alias (valfritt namn) för att hämta rådata via `sources.yml`, och sedan plockar ut och döper om de kolumner man vill jobba vidare med. Downstream-modeller (dim/fct) refererar sedan till *src-modellen* via `ref()`, istället för att varje modell behöver känna till hela den råa källtabellen. Det gör koden enklare att läsa och att underhålla, eftersom döpnings- och urvalslogiken bara finns på ett ställe.
- 
-### Senare, i models/fct/fct_job_ads
+
+#### Senare, i models/fct/fct_job_ads
 ```sql
 -- with <nytt alias> as (select allt, referera till src-aliaset via ref())
 with job_ads as (select * from {{ ref('src_job_ads') }})
- 
+
 select
     {{ dbt_utils.generate_surrogate_key(['occupation_label']) }} as occupation_id,
     vacancies,
@@ -377,14 +509,16 @@ select
     application_deadline
 from job_ads
 ```
- 
-Här skapas surrogatnyckeln `occupation_id` genom att hasha `occupation_label`. Det är **inte** nyckeln i sig som kopplar ihop tabellerna, utan det faktum att `dim_occupation` räknar fram exakt samma hash (samma kolumn, samma värde) för samma yrke. Eftersom båda sidor gör identisk hashning kan de sedan joinas ihop på `occupation_id`. I den här modellen görs ingen aggregering (`max`/`min`), eftersom `fct_job_ads` ska ha en rad per annons – aggregering med `max()`/`min()` används istället i dim-modellerna, där flera rader (annonser) ska slås ihop till en rad per unikt värde (t.ex. per yrke eller arbetsgivare).
 
-# 11. Testing i dbt
+Här skapas surrogatnyckeln `occupation_id` genom att hasha `occupation_label`. Det är **inte** nyckeln i sig som kopplar ihop tabellerna, utan det faktum att `dim_occupation` räknar fram exakt samma hash (samma kolumn, samma värde) för samma yrke. Eftersom båda sidor gör identisk hashning kan de sedan joinas ihop på `occupation_id`. I den här modellen görs ingen aggregering (`max`/`min`), eftersom `fct_job_ads` ska ha en rad per annons. Aggregering med `max()`/`min()` används istället i dim-modellerna, där flera rader (annonser) ska slås ihop till en rad per unikt värde (t.ex. per yrke eller arbetsgivare).
+
+---
+
+## 11. Testing i dbt
 
 Tester i dbt används för att kontrollera att datan och transformationerna håller rätt kvalitet. Ett test är en SQL-fråga som letar efter rader som **bryter mot** ett antagande. Om frågan returnerar 0 rader går testet igenom, annars misslyckas det.
 
-## Generiska tester (generic data tests)
+### Generiska tester (generic data tests)
 
 Generiska tester definieras i `schema.yml` (eller valfri `.yml`-fil) under respektive modell och kolumn. Se filen för exempel på hur det kan se ut.
 
@@ -399,7 +533,7 @@ dbt har **4 inbyggda generiska tester**:
 | `accepted_values` | Kolumnen innehåller bara värden från en definierad lista              |
 | `relationships`   | Varje värde finns även i en kolumn i en annan modell (främmande nyckel) |
 
-### Exempel
+#### Exempel
 
 ```yaml
 version: 2
@@ -424,12 +558,12 @@ models:
 
 > **Obs:** I nyare dbt-versioner (1.8+) heter nyckeln `data_tests`. Äldre versioner använder `tests`. Båda fungerar, men `data_tests` är det rekommenderade.
 
-## Fler tester med dbt_expectations
+### Fler tester med dbt_expectations
 
 Vill man ha fler typer av tester finns paketet **dbt_expectations**, som är inspirerat av Great Expectations i Python:
 [dbt-expectations på GitHub](https://github.com/calogica/dbt-expectations/tree/0.10.3/?tab=readme-ov-file)
 
-### Installation
+#### Installation
 
 1. Lägg till paketet i `packages.yml`:
 
@@ -445,11 +579,12 @@ packages:
 dbt deps
 ```
 
-## Köra tester
+### Köra tester
 
 Kör alla tester i terminalen:
 
 ```bash
+cd dbt_code
 dbt test
 ```
 
@@ -460,13 +595,13 @@ dbt test --select customers          # tester för en specifik modell
 dbt build                            # kör modeller och tester tillsammans
 ```
 
-## Singular tests (egna SQL-tester)
+### Singular tests (egna SQL-tester)
 
 När de inbyggda generiska testerna inte räcker kan man skriva sina egna tester som vanliga SQL-filer i mappen `tests/`. Dessa kallas **singular tests** (enskilda data tests) och är specifika för ett enskilt fall.
 
 Principen är densamma som för generiska tester: frågan ska returnera de rader som **bryter mot** regeln. Returnerar den **0 rader** går testet igenom, annars misslyckas det.
 
-### Exempel
+#### Exempel
 
 Fil: `tests/relevance_not_above_1.sql`
 
@@ -478,7 +613,7 @@ WHERE relevance > 1
 
 Testet kontrollerar att kolumnen `relevance` aldrig har ett värde över 1. Om det finns rader med `relevance > 1` returneras de och testet misslyckas.
 
-### Tips
+#### Tips
 
 - Filnamnet blir testets namn, så välj ett beskrivande namn (t.ex. `relevance_not_above_1.sql`).
 - Använd `{{ ref() }}` precis som i vanliga modeller, så att dbt förstår beroendena.
@@ -504,17 +639,17 @@ dbt test --select fct_job_ads
 
 ---
 
-# 12. Dashboard i Streamlit: koppla dbt till Streamlit
+## 12. Dashboard i Streamlit: koppla dbt till Streamlit
 
 Efter att dbt har byggt marts i Snowflake kan man läsa dem direkt från en Streamlit-dashboard. Flödet är: **Snowflake (mart-tabeller) → Python (snowflake-connector) → pandas DataFrame → Streamlit**.
 
-## 1. Installera paket
+### 1. Installera paket
 
 ```bash
 uv add streamlit pandas python-dotenv snowflake-connector-python
 ```
 
-## 2. Skapa en användare och roll för dashboarden
+### 2. Skapa en användare och roll för dashboarden
 
 Skapa en egen användare och roll för just det här syftet (att bygga dashboarden) med **endast läsrättigheter** (principen om minsta möjliga behörighet). Dashboarden ska aldrig kunna ändra eller radera data. Man kan även sätta upp en **service user** för ändamålet.
 
@@ -542,7 +677,7 @@ GRANT ROLE job_ads_reporter_role TO USER reporter;
 
 > **Tips:** `FUTURE`-rättigheter gör att rollen automatiskt får åtkomst även när dbt skapar om tabellerna vid nästa körning.
 
-## 3. Skapa `.env`-fil
+### 3. Skapa `.env`-fil
 
 Inloggningsuppgifter ska aldrig ligga i koden. Skapa en `.env` i projektets rot:
 
@@ -558,7 +693,7 @@ SNOWFLAKE_ROLE=job_ads_reporter_role
 
 > **Viktigt:** Lägg `.env` i `.gitignore` så att lösenordet aldrig hamnar på GitHub.
 
-## 4. Koppla till Snowflake
+### 4. Koppla till Snowflake
 
 Skapa en Python-fil, t.ex. `connect_data_warehouse.py`, som kopplar upp mot tabellen du vill använda och returnerar en DataFrame:
 
@@ -588,7 +723,7 @@ def query_job_listings(query="SELECT * FROM mart_technical_jobs"):
 
 > **Obs:** Snowflake returnerar kolumnnamn med **versaler** (t.ex. `JOB_ID`), så använd det när du refererar till kolumner i DataFrame.
 
-## 5. Bygg dashboarden
+### 5. Bygg dashboarden
 
 I `dashboard.py` importerar du funktionen och hämtar datan högst upp i layouten:
 
@@ -608,7 +743,7 @@ if __name__ == "__main__":
     layout()
 ```
 
-## 6. Starta dashboarden
+### 6. Starta dashboarden
 
 ```bash
 uv run streamlit run dashboard.py
@@ -617,11 +752,12 @@ uv run streamlit run dashboard.py
 Streamlit öppnar dashboarden i webbläsaren, vanligtvis på `http://localhost:8501`.
 
 ---
-# 13. dbt documentation
+
+## 13. dbt documentation
 
 dbt kan automatiskt generera en dokumentationssida för hela projektet. Den bygger på dina modeller, kolumner, tester och de beskrivningar du själv skrivit i `.yml`-filerna.
 
-## Skriva dokumentation
+### Skriva dokumentation
 
 Beskrivningar läggs till med `description:` i `schema.yml`, på både modeller och kolumner:
 
@@ -630,7 +766,7 @@ version: 2
 
 models:
   - name: fct_job_ads
-    description: "Faktatabell med ett annonsrad per jobbannons."
+    description: "Faktatabell med en annonsrad per jobbannons."
     columns:
       - name: job_id
         description: "Unik identifierare för annonsen."
@@ -638,7 +774,7 @@ models:
         description: "Relevanspoäng mellan 0 och 1."
 ```
 
-## Generera dokumentationen
+### Generera dokumentationen
 
 ```bash
 dbt docs generate
@@ -648,7 +784,7 @@ Kommandot skapar bland annat `catalog.json` och `manifest.json` i mappen `target
 
 > **Obs:** Varje gång du lägger till eller ändrar beskrivningar (eller modeller) behöver du köra `dbt docs generate` igen för att dokumentationen ska uppdateras.
 
-## Visa dokumentationen
+### Visa dokumentationen
 
 När filerna är genererade, kör:
 
@@ -664,7 +800,7 @@ Om porten redan används kan du välja en annan:
 dbt docs serve --port 8081
 ```
 
-## Vad finns i dokumentationen?
+### Vad finns i dokumentationen?
 
 - **Beskrivningar** av modeller och kolumner
 - **Kolumner och datatyper** för varje modell
@@ -672,99 +808,126 @@ dbt docs serve --port 8081
 - **SQL-koden** (både med Jinja och kompilerad)
 - **Lineage graph (DAG)**: en visuell graf över hur sources och modeller hänger ihop och beror på varandra
 
+---
 
-# 14. Orchestration Dagster
+## 14. Orkestrering med Dagster
 
 ### Vad är Dagster?
-- data orchestrator
-- automate data pipeline
-- produce data assets
-- Software Defined Assets(SDA) [Read More](https://dagster.io/glossary/software-defined-assets)
-    - define assets and their relationships
-    - execution plan inferred from these definitions
-    - declarative programming (ex.sql) (vs imperative programming (ex.pandas))
-- benefits for asset-centric approach
-    - manage dependencies
-    - monitor execution
+- En data orchestrator som automatiserar datapipelines och producerar data assets
+- Bygger på **Software Defined Assets (SDA)** ([läs mer](https://dagster.io/glossary/software-defined-assets)):
+    - man definierar assets och deras relationer
+    - exekveringsplanen utläses automatiskt från definitionerna
+    - deklarativ programmering (t.ex. SQL) i stället för imperativ (t.ex. pandas)
+- Fördelar med ett asset-centrerat arbetssätt:
+    - enkel hantering av beroenden
+    - bättre övervakning av körningar
 
-  ## Core concepts
-With dagster, a data pipeline orchestration is built by components of asset, job, schedule and sensor etc. In a python script, definitions is used to collect these components to build a workflow. The definitions will be then deployed for materializeion.
+### Grundbegrepp
+Med Dagster byggs en pipeline av komponenter som asset, job, schedule och sensor. I ett Python-skript samlas komponenterna i `Definitions`, som sedan deployas och kan materialiseras.
 
-dagster components:
+![Dagsters kärnkomponenter](images/dagster_components.png)
 
-![Dagster core components](images/dagster_components.png)
+#### Asset
+- En logisk dataenhet, t.ex. en databastabell, en csv-fil eller en bild
+- Ett `asset` kan vara beroende av andra `asset`
+- Ett `asset` kan användas i ett `job`, en `schedule` eller en `sensor`
 
-### Asset
-- a logical unit of data like a database table, a csv file, a png file etc...
-- an ```asset``` can has dependencies on other ```asset```
-- an ```asset``` can be used in a ```job```, ```schedule``` or ```sensor```
+#### Job
+- Det huvudsakliga sättet att köra saker
+- Innehåller ett urval av `asset`
+- Kan schemaläggas med en `schedule` eller triggas av en `sensor`
 
-### Job
-- the main form of execution
-- contain a selection of ```asset```
-- can be scheuled by ```schedule``` or triggered by ```sensor```
+#### Schedule
+- Automatiserar ett `job` eller materialisering av ett `asset` med ett bestämt intervall
+- Efter deployment måste automatiseringen slås på i Dagster UI
 
-### Scheule
-- a way to automate ```job``` or materialization of ```asset``` at a specific interval
-- after deployment, the automation needs to be started in dagster UI
+#### Sensor
+- Triggar ett `job` eller materialisering av ett `asset` när en viss händelse inträffar
+- Efter deployment måste automatiseringen slås på i Dagster UI
 
-### Sensor
-- a way to trigger ```job``` or materialization of ```asset``` when an certain event occur
-- after deployment, the automation needs to be started in dagster UI
+#### Definitions
+- `Definitions` är den översta nivån i ett workflow
+- Bara objekt som ingår i `Definitions` deployas och syns i Dagster UI
 
-### Definitions
-- ```Definitions``` is a top-level construct in a workflow
-- only objects included in the definitions will be deployed and visible within dagster UI
+#### Materialisering
+- Att **materialisera** ett asset betyder att Dagster kör koden som skapar det och lägger resultatet på plats, t.ex. laddar data till en tabell i Snowflake eller bygger en dbt-modell
+- Skillnad: att *definiera* ett asset är en beskrivning ("så här skapas tabellen"), medan *materialisering* är själva utförandet ("nu har den skapats")
+- Varje materialisering sparas som en händelse med tidpunkt, körning och metadata, så man kan se i UI:t när ett asset senast uppdaterades. Ett asset som aldrig körts visar "Never materialized"
+- Sensorer kan lyssna på materialiseringar, t.ex. starta dbt-jobbet när dlt-assetet har materialiserats
 
-## Installation 
-
-Installing the python packages below to your uv virtual environment:
+### Installation
+Installera paketen i ditt uv-virtuella environment:
 
 ```bash
 uv add dagster dagster-webserver dagster-dlt dagster-dbt
 ```
 
-## Setup folder structure
-- kopiera mappar från tidigare projekt 
-    - macros, models, target, dbt_project.yml, packages.yml och package-lock.yml
+### Sätta upp mappstruktur
+1. Kopiera följande från tidigare projekt:
+    - `macros`, `models`, `target`, `dbt_project.yml`, `packages.yml` och `package-lock.yml`
 
-- lägg till i source.yml:         
-```
+2. Lägg till i `sources.yml` under aktuell tabell, så att Dagster kopplar dbt-modellerna till dlt-assetet:
+```yaml
 meta:
   dagster:
     asset_key: ['dlt_jobads_source_jobads_resource']
 ```
 
-
-- installera dependencis:
+3. Installera dbt-beroenden:
 ```bash
 dbt deps
 ```
 
-*Note: Om du får 'command not found':* 
-1. se till att du har rätt 'select python interpreter' - .venv
-2. aktivera virtuel inviornment från den mappen du står i:
+> **Om du får `command not found`:**
+> 1. Kontrollera att rätt Python interpreter är vald (`.venv`)
+> 2. Aktivera det virtuella environmentet från mappen du står i:
+>    ```bash
+>    source ../../.venv/Scripts/activate
+>    ```
+
+### Starta Dagster
+Starta en lokal utvecklingsserver och ladda definitioner från en Python-fil:
+
 ```bash
-source ../../.venv/Scripts/activate
+dagster dev -f <python-fil>
+```
+
+UI:t öppnas på http://127.0.0.1:3000.
+
+### Bygga en Dagster-pipeline
+Pipelinen består av följande komponenter:
+- en `dlt resource` och ett `dlt asset` för att ladda data från Jobtech API till staging
+- ett job som materialiserar `dlt asset`
+- en schedule som schemalägger jobbet ovan
+- en `dbt resource` och ett `dbt asset` för datatransformation
+- ett job som materialiserar `dbt asset`
+- en sensor som startar jobbet ovan varje gång `dlt asset` har materialiserats
+- en `Definitions` som samlar alla komponenter för deployment
+
+Efter deployment kan du utforska de olika komponenterna i Dagster UI. Streamlit-appen (utanför orkestreringen) hämtar alltid senaste datan från data warehouse.
+
+> **Tips:** Kör bara en körning åt gången. Två körningar som använder samma dlt-pipeline samtidigt kan ge `FileNotFoundError` på `schema_updates.json`. Om du klickar **Materialize all** när sensorn är påslagen kan dbt dessutom köras dubbelt.
+
+### Stänga ned / starta om Dagster
+1. Avsluta med `Ctrl + C`
+2. Rensa eventuella hängande dlt-paket:
+```bash
+dlt pipeline jobsearch abort-packages
 ```
 
 
-## Command
-To start a dagster local development server and load definitions from a python file:
 
-```bash
-dagster dev -f <python file>
-```
 
-## Create a dagster pipeline with the components below:
-- a `dlt resource` and `dlt asset` to stage Jobtech API data,
-- a job to materialize `dlt asset`,
-- a schedule to schedule to job above,
-- a `dbt resource` and `dbt asset` for data transformation,
-- a job to materialize `dbt asset`,
-- a sensor to start the job above whenever `dlt asset` is materialized
-- a `definitions` to collect all the above components for deployment
 
-After the deployment, check the dagster UI to understand different components.
 
-Then, streamlit app outside this orchestration will always fetch the latest data from data warehouse.
+
+
+
+
+
+
+
+
+
+
+
