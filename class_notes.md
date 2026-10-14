@@ -930,7 +930,13 @@ till:
 ````bash
 profiles_dir = os.getenv("DBT_PROFILES_DIR") 
 ```
-
+lägg till filer:
+- pyproject.toml - kör dbt deps för att installera dependencis
+- dockerfile.dwh - dockerfile för att bygga upp images i containern ... 
+- dockerfile.dashboard - dockerfile för
+- docker-compose.yml - för att bygga upp våra två dockerfiles (images)
+- profiles.yml - 
+- .env - för känslig info till profiles.yml
 
 
 
