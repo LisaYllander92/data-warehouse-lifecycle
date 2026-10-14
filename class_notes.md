@@ -10,6 +10,7 @@
 - [12. Dashboard i Streamlit](#12-dashboard-i-streamlit-koppla-dbt-till-streamlit)
 - [13. dbt documentation](#13-dbt-documentation)
 - [14. Orkestrering med Dagster](#14-orkestrering-med-dagster)
+- [15. Clode Deployment - Azure](#15-cloud-deployment---azure)
 
 ---
 
@@ -914,8 +915,21 @@ Efter deployment kan du utforska de olika komponenterna i Dagster UI. Streamlit-
 ```bash
 dlt pipeline jobsearch abort-packages
 ```
+---
 
+# 15 Cloud Deployment - Azure
 
+- kopiera strukturen från lektion 14 Dagster.
+- ändra i definitions.py under *dbt-asset* för docker container
+
+import os
+```bash
+profiles_dir = Path.home() / ".dbt"  
+```
+till:
+````bash
+profiles_dir = os.getenv("DBT_PROFILES_DIR") 
+```
 
 
 
